@@ -61,6 +61,15 @@ def parse_len(s: str) -> int:
     return t
 
 
+def is_geo_restricted(custom_fields: dict) -> bool:
+    """DRTV used to send IsGeoRestricted as the string "true"/"false",
+    but now sends a proper boolean. Handle both."""
+    value = custom_fields.get(GEO_RESTRICTED, False)
+    if isinstance(value, str):
+        return value.lower() == "true"
+    return bool(value)
+
+
 async def get_show(show: str) -> Show:
     try:
         showid = int(show.split("_")[-1])
@@ -68,14 +77,13 @@ async def get_show(show: str) -> Show:
         abort(404)
     if showid not in shows or shows[showid].age + 3600 < time():
         async with ClientSession(connector=TCPConnector(ssl=ssl_context)) as session:
-            url = "https://www.dr.dk/drtv/serie/" + str(showid)
+            # DRTV no longer resolves the bare numeric id; the slugged path is required
+            url = "https://www.dr.dk/drtv/serie/" + show
             parsed = await get_jsonblob(session, url)
             page = parsed[CACHE]["itemDetail"]
             series = page[list(page.keys())[-1]][ITEM]
 
-            geo_restricted = False
-            if GEO_RESTRICTED in series[CUSTOM_FIELDS]:
-                geo_restricted = series[CUSTOM_FIELDS][GEO_RESTRICTED].lower() == "true"
+            geo_restricted = is_geo_restricted(series[CUSTOM_FIELDS])
 
             next_episode = None
             if NEXT_EPISODE in series[SHOW]:
@@ -147,11 +155,7 @@ async def get_show(show: str) -> Show:
                     if "contextualTitle" in ep:
                         title = ep["contextualTitle"]
 
-                    geo_restricted = False
-                    if GEO_RESTRICTED in ep[CUSTOM_FIELDS]:
-                        geo_restricted = (
-                            ep[CUSTOM_FIELDS][GEO_RESTRICTED].lower() == "true"
-                        )
+                    geo_restricted = is_geo_restricted(ep[CUSTOM_FIELDS])
 
                     season.add_episode(
                         Episode(
@@ -218,9 +222,7 @@ async def get_program(prog: str) -> Program:
         except ValueError:
             abort(404)
         if progid not in programs or programs[progid].age + 3600 < time():
-            jb = await get_jsonblob(
-                session, f"https://www.dr.dk/drtv/program/{str(progid)}"
-            )
+            jb = await get_jsonblob(session, f"https://www.dr.dk/drtv/program/{prog}")
             jb = jb[CACHE][PAGE]
             program_blob = jb[list(jb.keys())[0]][ITEM]
             programs[progid] = Program(
@@ -254,7 +256,7 @@ async def search(query: str) -> SearchResult:
                         i[TITLE],
                         i["images"]["wallpaper"],
                         i["shortDescription"],
-                        i[CUSTOM_FIELDS][GEO_RESTRICTED].lower() == "true",
+                        is_geo_restricted(i[CUSTOM_FIELDS]),
                         "/" + i["path"].split("/")[-1] + "/",
                     ),
                 )
@@ -269,7 +271,7 @@ async def search(query: str) -> SearchResult:
                         i[TITLE],
                         i["images"]["wallpaper"],
                         i["shortDescription"],
-                        i[CUSTOM_FIELDS][GEO_RESTRICTED].lower() == "true",
+                        is_geo_restricted(i[CUSTOM_FIELDS]),
                         i["path"],
                     ),
                 )
