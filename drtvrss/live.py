@@ -21,16 +21,23 @@ last_fetch = 0
 async def get_channels():
     global live_channels
     global last_fetch
-    if last_fetch + 60 * 30 < time() or (len(live_channels) == 0 and last_fetch + 60 < time()):
+    if last_fetch + 60 * 30 < time() or (
+        len(live_channels) == 0 and last_fetch + 60 < time()
+    ):
         async with ClientSession(connector=TCPConnector(ssl=ssl_context)) as session:
             blob = await get_jsonblob(session, "https://www.dr.dk/drtv/kanal/dr1_20875")
-            blob = blob["cache"]["list"]
-            blob = blob[list(blob.keys())[0]]["list"]["items"]
             channels = {}
-            for channel in blob:
-                channels[channel["channelShortCode"]] = LiveChannel(
-                    channel["title"], channel["customFields"]["hlsURL"]
-                )
+            # The page caches several lists (bookmarks, channels, ...) in no
+            # particular order, so look through all of them for the channels
+            for cached_list in blob["cache"]["list"].values():
+                for channel in cached_list.get("list", {}).get("items", []):
+                    if channel.get("type") != "channel":
+                        continue
+                    if "hlsURL" not in channel.get("customFields", {}):
+                        continue
+                    channels[channel["channelShortCode"]] = LiveChannel(
+                        channel["title"], channel["customFields"]["hlsURL"]
+                    )
             live_channels = channels
             last_fetch = time()
     return live_channels

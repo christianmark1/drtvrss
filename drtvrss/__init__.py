@@ -15,6 +15,7 @@ from flask_caching import Cache
 
 from .drtv import get_show, get_shows, search, get_program, get_long_description
 from .live import get_channels
+from .frontpage import get_frontpage, get_show_slug
 
 app = Flask(__name__)
 app.config.from_mapping({"CACHE_TYPE": "SimpleCache"})
@@ -37,6 +38,7 @@ def birthday() -> Optional[int]:
 async def index():
     return render_template(
         "index.html",
+        rows=await get_frontpage(),
         shows=list(get_shows().items())[:9],
         complaints_email=complaints_email,
         SERVICE_NAME=SERVICE_NAME,
@@ -104,6 +106,30 @@ async def view_show(showid):
 @app.route("/serie/<showid>")
 async def longlink(showid):
     return redirect(f"/{showid}/", code=302)
+
+
+def item_id(slug: str) -> str:
+    """DRTV slugs end in the numeric item id, e.g. brutale-boern_627994"""
+    try:
+        return str(int(slug.split("_")[-1]))
+    except ValueError:
+        abort(404)
+
+
+@app.route("/drtv/saeson/<season>")
+@app.route("/saeson/<season>")
+@cache.cached(timeout=24 * 60 * 60)
+async def season_link(season):
+    """Seasons have no page of their own here, redirect to the show"""
+    return redirect(f"/{await get_show_slug(item_id(season))}/", code=302)
+
+
+@app.route("/drtv/episode/<episode>")
+@app.route("/episode/<episode>")
+@cache.cached(timeout=24 * 60 * 60)
+async def episode_link(episode):
+    """Resolve a bare DRTV episode link to the show it belongs to"""
+    return redirect(f"/{await get_show_slug(item_id(episode))}/{episode}", code=302)
 
 
 @app.route("/<show>.xml")

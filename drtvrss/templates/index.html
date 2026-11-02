@@ -1,13 +1,62 @@
 {% extends "base.html" %}
+{% block head %}
+<title>{{ SERVICE_NAME }}</title>
+<style>
+    .drtv-row {
+        display: flex;
+        gap: 1rem;
+        overflow-x: auto;
+        padding-bottom: 1rem;
+        scroll-snap-type: x proximity;
+    }
+    .drtv-row .card {
+        flex: 0 0 18rem;
+        scroll-snap-align: start;
+    }
+    .drtv-row .card img {
+        aspect-ratio: 16 / 9;
+        object-fit: cover;
+    }
+    .drtv-row .card-text {
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+</style>
+{% endblock %}
 {% block content %}
 <div class="album py-5 bg-body-tertiary">
     <div class="container">
+        {% for row in rows %}
+        <h1 class="pt-4 fs-3">{{ row.title }}</h1>
+        <div class="drtv-row">
+            {% for item in row.items %}
+            <div class="card shadow-sm">
+                <a href="{{ item.url }}">
+                    <img src="{{ item.wallpaper }}" width="100%" loading="lazy" alt="">
+                </a>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h2 class="fs-5"><a href="{{ item.url }}">{{ item.title }}</a></h2>
+                        {% if item.geo_restricted %}
+                        <p title="Kun tilgængelig i Danmark">🇩🇰</p>
+                        {% endif %}
+                    </div>
+                    <p class="card-text">{{ item.description }}</p>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endfor %}
 
+        {% if rows|length == 0 %}
         <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 g-3">
             {% for i, show in shows %}
                 {% include "_show_card.html" %}
             {% endfor %}
         </div>
+        {% endif %}
     </div>
 </div>
 <footer class="text-body-secondary py-5">
@@ -24,8 +73,5 @@
             </p>
         </div>
     </div>
-
-
 </footer>
-
 {% endblock %}
